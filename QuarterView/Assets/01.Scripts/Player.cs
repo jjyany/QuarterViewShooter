@@ -16,7 +16,7 @@ public class Player : MonoBehaviour
     public float smoothTurnSpeed = 0.1f;
     public float moveDistance = 300f;
     public float punchiSpeed = 1.4f;
-    public float grenadeSpeed = 1.1f;
+    public float grenadeSpeed = 0.3f;
 
     public GameObject[] weapons;
     public bool[] hasWeapons;
@@ -64,8 +64,12 @@ public class Player : MonoBehaviour
     private bool isGrenade;
     private bool isDamage;
 
+    public bool isDead = false;
+
     private Animator anim;
     private Rigidbody rigid;
+    private SkinnedMeshRenderer skinMeshRenderer;
+    private MeshRenderer[] meshRenderers;
 
     private Vector3 moveVec;
     private Vector3 dodgeVec;
@@ -82,6 +86,8 @@ public class Player : MonoBehaviour
         anim = GetComponent<Animator>();
         rigid = GetComponent<Rigidbody>();
         currentWeapon = GetComponentInChildren<Weapon>();
+        skinMeshRenderer = GetComponentInChildren<SkinnedMeshRenderer>();
+        meshRenderers = GetComponentsInChildren<MeshRenderer>();
         followCam = Camera.main;
     }
 
@@ -98,6 +104,7 @@ public class Player : MonoBehaviour
         Swap();
         Interation();
         UpdateUI();
+        Dead();
     }
 
     private void FixedUpdate()
@@ -124,6 +131,11 @@ public class Player : MonoBehaviour
 
     private void Move()
     {
+        if(isDead)
+        {
+            return;
+        }
+
         currentSpeed = runSpeed;
         moveVec = new Vector3(hAxis, 0, vAxis).normalized;
 
@@ -257,8 +269,6 @@ public class Player : MonoBehaviour
     {
 
         fireDelay += Time.deltaTime;
-        //isFireReady = currentWeapon.AttackSpeed < fireDelay;
-
         isFireReady = currentWeaponIndex != -1 ? currentWeapon.AttackSpeed < fireDelay : punchiSpeed < fireDelay;
 
 
@@ -471,6 +481,18 @@ public class Player : MonoBehaviour
         }
     }
 
+    private void Dead()
+    {
+        if(health <= 0)
+        {
+            isDead = true;
+
+            anim.SetLayerWeight(1, 1.0f);
+
+            anim.SetTrigger("doDie");
+        }
+    }
+
     private void OnCollisionEnter(Collision collision)
     {
         if(collision.gameObject.tag == "Ground")
@@ -527,8 +549,8 @@ public class Player : MonoBehaviour
         {
             if (!isDamage)
             {
-                Bullet enemyBullet = other.GetComponent<Bullet>();
-                health -= enemyBullet.damage;
+                Enemy enemy = other.GetComponentInParent<Enemy>();
+                health -= enemy.attackDamage;
                 StartCoroutine(OnDamage());
             }
         }
@@ -537,7 +559,21 @@ public class Player : MonoBehaviour
     private IEnumerator OnDamage()
     {
         isDamage = true;
+
+        skinMeshRenderer.material.color = Color.red;
+        foreach(MeshRenderer mesh in meshRenderers)
+        {
+            mesh.material.color = Color.red;
+        }
+
         yield return new WaitForSeconds(1.0f);
+
+        skinMeshRenderer.material.color = Color.white;
+        foreach(MeshRenderer mesh in meshRenderers)
+        {
+            mesh.material.color = Color.white;
+        }
+
         isDamage = false;
     }
 
