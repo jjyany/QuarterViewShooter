@@ -13,6 +13,7 @@ public class Grenade : MonoBehaviour
     public float grenadeRedius = 15.0f;
     public float grenadeDestroy = 5.0f;
 
+
     void Start()
     {
         StartCoroutine(Explosion());
@@ -37,4 +38,5 @@ public class Grenade : MonoBehaviour
 
         Destroy(gameObject, grenadeDestroy);
     }
+
 }
