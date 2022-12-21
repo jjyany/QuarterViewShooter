@@ -26,11 +26,11 @@ public class Enemy : MonoBehaviour
     public int maxHealth;
     public int curHealth;
 
-    public int grenadeDamage = 50;
     public int bulletForce = 5;
     public int grenadeForce = 9;
 
     public int attackDamage = 10;
+    public int grenadeDamage = 50;
 
     public float walkSpeed = 0.1f;
     public float runSpeed = 0.2f;
@@ -73,31 +73,33 @@ public class Enemy : MonoBehaviour
 
     private void Start()
     {
-        StartCoroutine(UpdatePatrol());
+        //StartCoroutine(UpdatePatrol());
+        state = State.isChase;
     }
 
     private void Update()
     {
-        if(isDead)
+        if(state == State.isDie)
         {
             return;
         }
 
         if(state == State.isHit)
         {
-            agent.speed = 0;
+            agent.speed = walkSpeed * Time.deltaTime;
+            //agent.isStopped = true;
         }
 
-            state = State.isChase;
-
-            anim.SetFloat("Speed", agent.desiredVelocity.magnitude);
-
-            player = GetComponent<Player>();
+        anim.SetFloat("Speed", agent.desiredVelocity.magnitude);
 
         if (state == State.isChase)
         {
-            agent.speed = runSpeed;
-            agent.SetDestination(player.transform.position);
+            if (state != State.isDie)
+            {
+                //agent.speed = walkSpeed;
+                agent.speed = runSpeed;
+                agent.SetDestination(target.position);
+            }
         }
     }
 
@@ -142,30 +144,9 @@ public class Enemy : MonoBehaviour
 
     private IEnumerator UpdatePatrol()
     {
-        while (!(state == State.isDie))
-        {
-                if (target != null)
-                {
-                    target = null;
-                }
 
-                if (state != State.isPatrol)
-                {
-                    state = State.isPatrol;
-                    agent.speed = walkSpeed;
-                    anim.SetFloat("Speed", agent.desiredVelocity.magnitude);
-                }
-
-                if (agent.remainingDistance <= 1f)
-                {
-                    var partolTargetPosition = RandomPoint.GetRandomPointOnNavMesh(transform.position, 10f, NavMesh.AllAreas);
-                    agent.SetDestination(partolTargetPosition);
-                }
-
-            Targeting();
-            break;
-        }
-        yield return new WaitForSeconds(1.0f);
+        agent.SetDestination(target.position);
+        yield return new WaitForSeconds(3.0f);
     }
 
 
@@ -227,6 +208,8 @@ public class Enemy : MonoBehaviour
     {
         if (curHealth > 0)
         {
+            state = State.isHit;
+            anim.SetTrigger("isHit");
             StartCoroutine(OnDamageEffect());
             _reactVec = _reactVec.normalized;
 
@@ -246,22 +229,21 @@ public class Enemy : MonoBehaviour
         }
         else if(curHealth <= 0)
         {
-            gameObject.layer = 15;
-            anim.SetTrigger("doDie");
             state = State.isDie;
             agent.enabled = false;
+            gameObject.layer = 15;
+            anim.SetTrigger("doDie");
             Destroy(gameObject, 10.0f);
         }
 
-        state = State.isChase;
+        //state = State.isChase;
     }
 
     private IEnumerator OnDamageEffect()
     {
-        state = State.isHit;
         bloodEffect.Play();
-        anim.SetTrigger("isHit");
         yield return new WaitForSeconds(0.2f);
+        state = State.isChase;
     }
 
 }
