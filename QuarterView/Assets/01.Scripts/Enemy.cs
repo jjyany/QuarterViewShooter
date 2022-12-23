@@ -1,7 +1,9 @@
 using Cinemachine.Utility;
 using System.Collections;
 using System.Collections.Generic;
+using System.ComponentModel.Design;
 using System.Diagnostics.Tracing;
+using Unity.VisualScripting;
 using UnityEngine;
 using UnityEngine.AI;
 using UnityEngine.SearchService;
@@ -17,6 +19,12 @@ public class Enemy : MonoBehaviour
         isDie           //사망
     };
 
+    public enum Type
+    {
+        melee,
+
+    }
+
     public State state = 0;
 
     public Transform target;
@@ -29,31 +37,33 @@ public class Enemy : MonoBehaviour
     public int bulletForce = 5;
     public int grenadeForce = 9;
 
-    public int attackDamage = 10;
     public int grenadeDamage = 50;
 
-    public float walkSpeed = 0.1f;
-    public float runSpeed = 0.2f;
+    public float walkSpeed;
+    public float runSpeed;
     public float attackDistance;
-    public float attackRadius = 0.5f;
+    public float attackRadius = 0.1f;
+
+    public float turnSmoothVelocity;
+    [Range(0.1f, 2.0f)]
+    public float turnSmoothSpeed;
+    [Range(0, 2.0f)]
+    public float attackStay;
+
+
 
     public bool isDead = false;
 
     public SphereCollider meleeArea;
-    public Player player;
 
     private Rigidbody rigid;
     private NavMeshAgent agent;
     private Animator anim;
 
-    private bool hasTarget => player != null && !player.isDead;
-
-
-
     private void OnDrawGizmosSelected()
     {
         Gizmos.color = new Color(1f, 0, 0, 0.5f);
-        Gizmos.DrawSphere(eyePosition.position, 2f);
+        Gizmos.DrawSphere(eyePosition.position, 1.2f);
     }
 
     private void Awake()
@@ -67,7 +77,7 @@ public class Enemy : MonoBehaviour
         attackPivot.y = transform.position.y;
 
         attackDistance = Vector3.Distance(transform.position, attackPivot) + attackRadius;
-        agent.stoppingDistance = attackDistance;
+        agent.stoppingDistance = attackRadius;
         agent.speed = walkSpeed;
     }
 
@@ -79,24 +89,28 @@ public class Enemy : MonoBehaviour
 
     private void Update()
     {
-        if(state == State.isDie)
+        if(isDead || state == State.isHit)
         {
             return;
         }
 
-        if(state == State.isHit)
-        {
-            agent.speed = walkSpeed * Time.deltaTime;
-            //agent.isStopped = true;
-        }
-
-        anim.SetFloat("Speed", agent.desiredVelocity.magnitude);
-
         if (state == State.isChase)
         {
+            anim.SetFloat("Speed", agent.desiredVelocity.magnitude);
+
+            if (agent.remainingDistance <= 0.1f)
+            {
+                var lookRotation = Quaternion.LookRotation(target.transform.position - transform.position);
+
+                var turnAngleY = lookRotation.eulerAngles.y;
+
+                turnAngleY = Mathf.SmoothDampAngle(transform.eulerAngles.y, turnAngleY, ref turnSmoothVelocity, turnSmoothSpeed);
+                transform.eulerAngles = Vector3.up * turnAngleY;
+            }
+
+
             if (state != State.isDie)
             {
-                //agent.speed = walkSpeed;
                 agent.speed = runSpeed;
                 agent.SetDestination(target.position);
             }
@@ -106,21 +120,27 @@ public class Enemy : MonoBehaviour
     private void FixedUpdate()
     {
         FreezeVelcity();
+
+        Targeting();
     }
 
     private void Targeting()
     {
-        float targetRedius = 1f;
-        float targetRange = 2f;
-
-        RaycastHit[] hits = Physics.SphereCastAll(transform.position, targetRedius,
-                                transform.forward, targetRange, LayerMask.GetMask("Player"));
-
-        var playerliving = GetComponent<Player>();
-
-        if(hits.Length > 0 && playerliving.tag == "Player" && !(state == State.isAttack))
+        if (!isDead)
         {
-            StartCoroutine(Attack());
+            float targetRedius = 0.25f;
+            float targetRange = 0.6f;
+
+            RaycastHit[] hits = Physics.SphereCastAll(transform.position, targetRedius,
+                                    transform.forward, targetRange, LayerMask.GetMask("Player"));
+            if (hits.Length > 0 && !(state == State.isAttack))
+            {
+                if (state == State.isHit)
+                {
+                    Debug.Log("레이케스트 성공중 Hit성공");
+                }
+                StartCoroutine(Attack());
+            }
         }
     }
 
@@ -128,18 +148,23 @@ public class Enemy : MonoBehaviour
     {
         state = State.isAttack;
 
-        if (state == State.isAttack)
+        if (state == State.isAttack || !isDead)
         {
             anim.SetTrigger("isAttack");
 
-            yield return new WaitForSeconds(0.28f);
-            meleeArea.enabled = true;
-            yield return new WaitForSeconds(0.5f);
-            meleeArea.enabled = false;
-            yield return new WaitForSeconds(0.8f);
+            if(state == State.isHit)
+            {
+                Debug.Log("공격중 Hit성공");
+                yield return new WaitForSeconds(1.0f);
+            }
 
-            state = State.isChase;
+            yield return new WaitForSeconds(0.58f);
+            meleeArea.enabled = true;
+            yield return new WaitForSeconds(0.2f);
+            meleeArea.enabled = false;
         }
+
+        state = State.isChase;
     }
 
     private IEnumerator UpdatePatrol()
@@ -153,7 +178,12 @@ public class Enemy : MonoBehaviour
 
     private void FreezeVelcity()
     {
-        if (state == State.isChase || state == State.isPatrol || state == State.isHit)
+        if (state == State.isChase || state == State.isPatrol)
+        {
+            rigid.angularVelocity = Vector3.zero;
+        }
+
+        if(state == State.isHit || state == State.isAttack || state == State.isDie)
         {
             rigid.velocity = Vector3.zero;
             rigid.angularVelocity = Vector3.zero;
@@ -165,55 +195,56 @@ public class Enemy : MonoBehaviour
         curHealth -= grenadeDamage;
 
         Vector3 reactVec = transform.position - _explosionPos;
-        OnDamage(reactVec, true);
+        StartCoroutine(OnDamage(reactVec, true));
 
     }
 
     private void OnTriggerEnter(Collider other)
     {
-        if (other.tag == "Melee")
+        if (state != State.isDie && other)
         {
-            Weapon weapon = other.GetComponent<Weapon>();
-            curHealth -= weapon.damage;
-
             Vector3 reactVec = transform.position - other.transform.position;
 
-            OnDamage(reactVec, false);
+            if (other.tag == "Melee")
+            {
+                Weapon weapon = other.GetComponent<Weapon>();
+                curHealth -= weapon.damage;
+                StartCoroutine(OnDamage(reactVec, false));
+            }
+            else if (other.tag == "Bullet")
+            {
+                Bullet bullet = other.GetComponent<Bullet>();
+                curHealth -= bullet.damage;
+                StartCoroutine(OnDamage(reactVec, false));
+            }
 
-        }
-        else if(other.tag == "Bullet")
-        {
-            Bullet bullet = other.GetComponent<Bullet>();
-
-            curHealth -= bullet.damage;
-
-            Vector3 reactVec = other.transform.position - transform.position;
-
-            OnDamage(reactVec, false);
-        }
-
-        else if (other.tag == "Punching")
-        {
-            Weapon weapon = other.GetComponent<Weapon>();
-
-            curHealth -= weapon.damage;
-
-            Vector3 reactVec = transform.position - other.transform.position;
-
-            OnDamage(reactVec, false);
+            else if (other.tag == "Punching")
+            {
+                Weapon weapon = other.GetComponent<Weapon>();
+                curHealth -= weapon.damage;
+                StartCoroutine(OnDamage(reactVec, false));
+            }
         }
     }
 
-    private void OnDamage(Vector3 _reactVec , bool _isGrenade)
+    private IEnumerator OnDamage(Vector3 _reactVec , bool _isGrenade)
     {
         if (curHealth > 0)
         {
             state = State.isHit;
-            anim.SetTrigger("isHit");
-            StartCoroutine(OnDamageEffect());
-            _reactVec = _reactVec.normalized;
+            if (state == State.isHit)
+            {
+                Debug.Log("OnDamage Execution");
+                agent.isStopped = true;
+                anim.SetTrigger("isHit");
+                bloodEffect.Play();
+                _reactVec = _reactVec.normalized;
+                agent.isStopped = false;
+                yield return new WaitForSeconds(attackStay);
+                state = State.isChase;
+            }
 
-            if(_isGrenade)
+            if (_isGrenade)
             {
                 _reactVec = _reactVec.normalized;
                 _reactVec += Vector3.up * grenadeDamage;
@@ -226,24 +257,19 @@ public class Enemy : MonoBehaviour
             {
                 rigid.AddForce(_reactVec * bulletForce, ForceMode.Impulse);
             }
+
+
         }
         else if(curHealth <= 0)
         {
             state = State.isDie;
+            isDead = true;
             agent.enabled = false;
             gameObject.layer = 15;
             anim.SetTrigger("doDie");
             Destroy(gameObject, 10.0f);
         }
 
-        //state = State.isChase;
-    }
 
-    private IEnumerator OnDamageEffect()
-    {
-        bloodEffect.Play();
-        yield return new WaitForSeconds(0.2f);
-        state = State.isChase;
     }
-
 }
