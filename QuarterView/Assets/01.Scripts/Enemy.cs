@@ -7,6 +7,7 @@ using Unity.VisualScripting;
 using UnityEngine;
 using UnityEngine.AI;
 using UnityEngine.SearchService;
+using UnityEngine.UIElements;
 
 public class Enemy : MonoBehaviour
 {
@@ -21,14 +22,15 @@ public class Enemy : MonoBehaviour
 
     public enum Type
     {
-        melee,
-
+        meleeAttack,
+        runAttack,
+        farAttack
     }
 
     public State state = 0;
+    public Type type = 0;
 
-    public Transform target;
-    public Transform eyePosition;
+    public GameObject target;
     public ParticleSystem bloodEffect;
 
     public int maxHealth;
@@ -43,6 +45,7 @@ public class Enemy : MonoBehaviour
     public float runSpeed;
     public float attackDistance;
     public float attackRadius = 0.1f;
+    public float hitTime = 0.55f;
 
     public float turnSmoothVelocity;
     [Range(0.1f, 2.0f)]
@@ -55,6 +58,8 @@ public class Enemy : MonoBehaviour
     public bool isDead = false;
 
     public SphereCollider meleeArea;
+    public GameObject enemyBullet;
+    public Transform bulletPos;
 
     private Rigidbody rigid;
     private NavMeshAgent agent;
@@ -63,7 +68,6 @@ public class Enemy : MonoBehaviour
     private void OnDrawGizmosSelected()
     {
         Gizmos.color = new Color(1f, 0, 0, 0.5f);
-        Gizmos.DrawSphere(eyePosition.position, 1.2f);
     }
 
     private void Awake()
@@ -73,17 +77,17 @@ public class Enemy : MonoBehaviour
         anim = GetComponent<Animator>();
         meleeArea = GetComponentInChildren<SphereCollider>();
 
-        var attackPivot = meleeArea.transform.position;
-        attackPivot.y = transform.position.y;
+        //var attackPivot = meleeArea.transform.position;
+        //attackPivot.y = transform.position.y;
 
-        attackDistance = Vector3.Distance(transform.position, attackPivot) + attackRadius;
+        //attackDistance = Vector3.Distance(transform.position, attackPivot) + attackRadius;
         agent.stoppingDistance = attackRadius;
         agent.speed = walkSpeed;
     }
 
     private void Start()
     {
-        //StartCoroutine(UpdatePatrol());
+        StartCoroutine(UpdatePatrol());
         state = State.isChase;
     }
 
@@ -96,23 +100,37 @@ public class Enemy : MonoBehaviour
 
         if (state == State.isChase)
         {
-            anim.SetFloat("Speed", agent.desiredVelocity.magnitude);
-
-            if (agent.remainingDistance <= 0.1f)
+            if (target != null)
             {
-                var lookRotation = Quaternion.LookRotation(target.transform.position - transform.position);
+                anim.SetFloat("Speed", agent.desiredVelocity.magnitude);
 
-                var turnAngleY = lookRotation.eulerAngles.y;
+                if (agent.remainingDistance <= 0.1f)
+                {
+                    var lookRotation = Quaternion.LookRotation(target.transform.position - transform.position);
 
-                turnAngleY = Mathf.SmoothDampAngle(transform.eulerAngles.y, turnAngleY, ref turnSmoothVelocity, turnSmoothSpeed);
-                transform.eulerAngles = Vector3.up * turnAngleY;
-            }
+                    var turnAngleY = lookRotation.eulerAngles.y;
+
+                    turnAngleY = Mathf.SmoothDampAngle(transform.eulerAngles.y, turnAngleY, ref turnSmoothVelocity, turnSmoothSpeed);
+                    transform.eulerAngles = Vector3.up * turnAngleY;
+                }
 
 
-            if (state != State.isDie)
-            {
-                agent.speed = runSpeed;
-                agent.SetDestination(target.position);
+                if (state != State.isDie)
+                {
+                    switch (type)
+                    {
+                        case Type.meleeAttack:
+                            agent.speed = walkSpeed;
+                            break;
+                        case Type.runAttack:
+                            agent.speed = runSpeed;
+                            break;
+                        case Type.farAttack:
+                            agent.speed = walkSpeed;
+                            break;
+                    }
+                    agent.SetDestination(target.transform.position);
+                }
             }
         }
     }
@@ -121,25 +139,44 @@ public class Enemy : MonoBehaviour
     {
         FreezeVelcity();
 
-        Targeting();
+        StartCoroutine(Targeting());
     }
 
-    private void Targeting()
+    private IEnumerator Targeting()
     {
         if (!isDead)
         {
-            float targetRedius = 0.25f;
-            float targetRange = 0.6f;
+            float targetRedius = 0;
+            float targetRange = 0;
+
+            switch(type)
+            {
+                case Type.meleeAttack:
+                    targetRedius = 0.3f;
+                    targetRange = 0.6f;
+                    break;
+                case Type.runAttack:
+                    targetRedius = 0.25f;
+                    targetRange = 0.6f;
+                    break;
+                case Type.farAttack:
+                    targetRedius = 0.5f;
+                    targetRange = 15f;
+                    break;
+            }
 
             RaycastHit[] hits = Physics.SphereCastAll(transform.position, targetRedius,
                                     transform.forward, targetRange, LayerMask.GetMask("Player"));
             if (hits.Length > 0 && !(state == State.isAttack))
             {
-                if (state == State.isHit)
+                if(state == State.isHit)
                 {
-                    Debug.Log("레이케스트 성공중 Hit성공");
+                    yield return new WaitForSeconds(1.0f);
                 }
-                StartCoroutine(Attack());
+                else
+                {
+                    StartCoroutine(Attack());
+                }
             }
         }
     }
@@ -148,30 +185,67 @@ public class Enemy : MonoBehaviour
     {
         state = State.isAttack;
 
-        if (state == State.isAttack || !isDead)
+        if (state == State.isAttack)
         {
-            anim.SetTrigger("isAttack");
-
-            if(state == State.isHit)
+            switch(type)
             {
-                Debug.Log("공격중 Hit성공");
-                yield return new WaitForSeconds(1.0f);
-            }
+                case Type.meleeAttack:
+                    if (isDead)
+                    {
+                        break;
+                    }
+                    anim.SetTrigger("isMelee");
+                    agent.isStopped = true;
+                    yield return new WaitForSeconds(0.98f);
+                    meleeArea.enabled = true;
+                    yield return new WaitForSeconds(0.8f);
+                    meleeArea.enabled = false;
+                    break;
 
-            yield return new WaitForSeconds(0.58f);
-            meleeArea.enabled = true;
-            yield return new WaitForSeconds(0.2f);
-            meleeArea.enabled = false;
+                case Type.runAttack:
+                    if (isDead)
+                    {
+                        break;
+                    }
+                    anim.SetTrigger("isAttack");
+                    agent.isStopped = true;
+                    yield return new WaitForSeconds(0.58f);
+                    meleeArea.enabled = true;
+                    yield return new WaitForSeconds(0.2f);
+                    meleeArea.enabled = false;
+                    break;
+
+                case Type.farAttack:
+                    if (isDead)
+                    {
+                        break;
+                    }
+                    yield return new WaitForSeconds(0.58f);
+                    anim.SetTrigger("isAttack");
+                    agent.isStopped = true;
+                    yield return new WaitForSeconds(1.0f);
+                    GameObject instantBullet = Instantiate(enemyBullet, bulletPos.position, transform.rotation);
+                    Rigidbody rigidBullet = instantBullet.GetComponent<Rigidbody>();
+                    rigidBullet.velocity = transform.forward * 10f;
+
+                    yield return new WaitForSeconds(1.5f);
+                    break;
+            }
         }
 
-        state = State.isChase;
+        if(!isDead)
+        {
+            state = State.isChase;
+            agent.isStopped = false;
+        }
     }
 
     private IEnumerator UpdatePatrol()
     {
 
-        agent.SetDestination(target.position);
-        yield return new WaitForSeconds(3.0f);
+        yield return new WaitForSeconds(2.0f);
+        target = GameObject.FindWithTag("Player");
+        agent.SetDestination(target.transform.position);
     }
 
 
@@ -240,7 +314,7 @@ public class Enemy : MonoBehaviour
                 bloodEffect.Play();
                 _reactVec = _reactVec.normalized;
                 agent.isStopped = false;
-                yield return new WaitForSeconds(attackStay);
+                yield return new WaitForSeconds(hitTime);
                 state = State.isChase;
             }
 
