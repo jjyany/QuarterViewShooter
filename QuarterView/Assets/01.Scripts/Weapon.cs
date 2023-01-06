@@ -72,7 +72,7 @@ public class Weapon : MonoBehaviour
         punchArea.enabled = true;
         punchtrailEffect.enabled = true;
 
-        yield return new WaitForSeconds(0.35f);
+        yield return new WaitForSeconds(0.15f);
         punchArea.enabled = false;
         punchtrailEffect.enabled = false;
     }
