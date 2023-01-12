@@ -7,16 +7,15 @@ public class Bullet : MonoBehaviour
 {
     public int damage;
 
-    private void OnCollisionEnter(Collision collision)
+    private void Update()
     {
-        if(collision.gameObject.tag == "Ground")
-        {
-            Destroy(gameObject, 3.0f);
-        }
-        else if(collision.gameObject.tag == "Wall")
-        {
-            Destroy(gameObject);
-        }
+        StartCoroutine(BulletDestroy());
+    }
+
+    private IEnumerator BulletDestroy()
+    {
+        yield return new WaitForSeconds(5.0f);
+        Destroy(gameObject);
     }
 
     private void OnTriggerEnter(Collider other)
@@ -25,7 +24,25 @@ public class Bullet : MonoBehaviour
         {
             Destroy(gameObject);
         }
+        else if(other.gameObject.tag == "Wall")
+        {
+            Destroy(gameObject);
+        }
+        else if(other.gameObject.tag == "Ground")
+        {
+            Destroy(gameObject, 2.0f);
+        }
     }
+
+    private void OnCollisionEnter(Collision collision)
+    {
+        if(collision.gameObject.tag == "Ground")
+        {
+            Destroy(gameObject, 2.0f);
+        }
+    }
+
+
 
 
 }
