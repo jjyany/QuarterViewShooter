@@ -24,7 +24,8 @@ public class Enemy : MonoBehaviour
     {
         meleeAttack,
         runAttack,
-        farAttack
+        farAttack,
+        bossAttack
     }
 
     public State state = 0;
@@ -61,9 +62,9 @@ public class Enemy : MonoBehaviour
     public GameObject enemyBullet;
     public Transform bulletPos;
 
-    private Rigidbody rigid;
-    private NavMeshAgent agent;
-    private Animator anim;
+    private protected Rigidbody rigid;
+    private protected NavMeshAgent agent;
+    private protected Animator anim;
 
     private void OnDrawGizmosSelected()
     {
@@ -77,10 +78,7 @@ public class Enemy : MonoBehaviour
         anim = GetComponent<Animator>();
         meleeArea = GetComponentInChildren<SphereCollider>();
 
-        //var attackPivot = meleeArea.transform.position;
-        //attackPivot.y = transform.position.y;
 
-        //attackDistance = Vector3.Distance(transform.position, attackPivot) + attackRadius;
         agent.stoppingDistance = attackRadius;
         agent.speed = walkSpeed;
     }
@@ -98,7 +96,7 @@ public class Enemy : MonoBehaviour
             return;
         }
 
-        if (state == State.isChase)
+        if (state == State.isChase && type != Type.bossAttack)
         {
             if (target != null)
             {
@@ -144,7 +142,7 @@ public class Enemy : MonoBehaviour
 
     private IEnumerator Targeting()
     {
-        if (!isDead)
+        if (!isDead && type != Type.bossAttack)
         {
             float targetRedius = 0;
             float targetRange = 0;
@@ -161,7 +159,7 @@ public class Enemy : MonoBehaviour
                     break;
                 case Type.farAttack:
                     targetRedius = 0.5f;
-                    targetRange = 15f;
+                    targetRange = 10f;
                     break;
             }
 
@@ -173,10 +171,8 @@ public class Enemy : MonoBehaviour
                 {
                     yield return new WaitForSeconds(1.0f);
                 }
-                else
-                {
-                    StartCoroutine(Attack());
-                }
+
+                StartCoroutine(Attack());
             }
         }
     }
@@ -220,14 +216,13 @@ public class Enemy : MonoBehaviour
                     {
                         break;
                     }
-                    yield return new WaitForSeconds(0.58f);
                     anim.SetTrigger("isAttack");
                     agent.isStopped = true;
+                    transform.LookAt(target.transform);
                     yield return new WaitForSeconds(1.0f);
                     GameObject instantBullet = Instantiate(enemyBullet, bulletPos.position, transform.rotation);
                     Rigidbody rigidBullet = instantBullet.GetComponent<Rigidbody>();
                     rigidBullet.velocity = transform.forward * 10f;
-
                     yield return new WaitForSeconds(1.5f);
                     break;
             }
@@ -242,10 +237,12 @@ public class Enemy : MonoBehaviour
 
     private IEnumerator UpdatePatrol()
     {
-
-        yield return new WaitForSeconds(2.0f);
-        target = GameObject.FindWithTag("Player");
-        agent.SetDestination(target.transform.position);
+        if (type != Type.bossAttack)
+        {
+            yield return new WaitForSeconds(2.0f);
+            target = GameObject.FindWithTag("Player");
+            agent.SetDestination(target.transform.position);
+        }
     }
 
 
@@ -254,7 +251,7 @@ public class Enemy : MonoBehaviour
     {
         if (state == State.isChase || state == State.isPatrol)
         {
-            rigid.angularVelocity = Vector3.zero;
+                rigid.angularVelocity = Vector3.zero;
         }
 
         if(state == State.isHit || state == State.isAttack || state == State.isDie)
@@ -308,7 +305,6 @@ public class Enemy : MonoBehaviour
             state = State.isHit;
             if (state == State.isHit)
             {
-                Debug.Log("OnDamage Execution");
                 agent.isStopped = true;
                 anim.SetTrigger("isHit");
                 bloodEffect.Play();
@@ -341,7 +337,10 @@ public class Enemy : MonoBehaviour
             agent.enabled = false;
             gameObject.layer = 15;
             anim.SetTrigger("doDie");
-            Destroy(gameObject, 10.0f);
+            if (type != Type.bossAttack)
+            {
+                Destroy(gameObject, 10.0f);
+            }
         }
 
 
