@@ -65,12 +65,6 @@ public class Enemy : MonoBehaviour
     private protected Rigidbody rigid;
     private protected NavMeshAgent agent;
     private protected Animator anim;
-
-    private void OnDrawGizmosSelected()
-    {
-        Gizmos.color = new Color(1f, 0, 0, 0.5f);
-    }
-
     private void Awake()
     {
         rigid = GetComponent<Rigidbody>();
@@ -251,7 +245,7 @@ public class Enemy : MonoBehaviour
     {
         if (state == State.isChase || state == State.isPatrol)
         {
-                rigid.angularVelocity = Vector3.zero;
+            rigid.angularVelocity = Vector3.zero;
         }
 
         if(state == State.isHit || state == State.isAttack || state == State.isDie)
@@ -337,9 +331,26 @@ public class Enemy : MonoBehaviour
             agent.enabled = false;
             gameObject.layer = 15;
             anim.SetTrigger("doDie");
+
+            Player playerCoin = GameObject.Find("Player").GetComponent<Player>();
+
+            switch (type)
+            {
+                case Type.meleeAttack:
+                    playerCoin.coin += 100;
+                    break;
+                case Type.runAttack:
+                    playerCoin.coin += 100;
+                    break;
+                case Type.farAttack:
+                    playerCoin.coin += 100;
+                    break;
+            }
+
+            
             if (type != Type.bossAttack)
             {
-                Destroy(gameObject, 10.0f);
+                Destroy(gameObject, 5.0f);
             }
         }
 

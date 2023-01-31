@@ -15,7 +15,7 @@ public class Player : MonoBehaviour
     public float dodgeSpeed = 10f;
     public float jump = 3f;
     public float turnSpeed = 2.0f;
-    public float smoothTurnSpeed = 0.1f;
+    private float smoothTurnSpeed = 0.1f;
     public float moveDistance = 300f;
     public float punchiSpeed = 1.4f;
     public float grenadeSpeed = 0.3f;
@@ -34,9 +34,11 @@ public class Player : MonoBehaviour
 
     public int ammo;
     public int health;
+    public int coin;
 
     public int maxAmmo;
     public int maxHealth;
+    public int maxCoin;
     public int maxHasGrenade;
 
     private float hAxis;
@@ -57,16 +59,16 @@ public class Player : MonoBehaviour
     public bool inputSwapWeapon_2;
     public bool inputSwapWeapon_3;
 
-    public bool isJump;        //점프중
-    public bool isDodge;       //회피중
-    public bool isGetItem;     //아이템먹는중
-    public bool isSwap = false;        //무기교체중
-    public bool isFireReady = true;   //공격대기
-    public bool isReload;
-    public bool isBorder;      //Ground 충돌
-    public bool isGrenade;
-    public bool isDamage;
-    public bool isHit;
+    private bool isJump;        //점프중
+    private bool isDodge;       //회피중
+    private bool isGetItem;     //아이템먹는중
+    private bool isSwap = false;        //무기교체중
+    private bool isFireReady = true;   //공격대기
+    private bool isReload;
+    private bool isBorder;      //Ground 충돌
+    private bool isGrenade;
+    private bool isDamage;
+    private bool isHit;
 
     public bool isDead = false;
 
@@ -93,6 +95,8 @@ public class Player : MonoBehaviour
         skinMeshRenderer = GetComponentInChildren<SkinnedMeshRenderer>();
         meshRenderers = GetComponentsInChildren<MeshRenderer>();
         followCam = Camera.main;
+
+        coin = 0;
     }
 
     private void Update()
@@ -107,7 +111,6 @@ public class Player : MonoBehaviour
         Dodge();
         Swap();
         Interation();
-        UpdateUI();
         Dead();
     }
 
@@ -209,7 +212,7 @@ public class Player : MonoBehaviour
 
     private void Jump()
     {
-        if(inputJump && !isJump && !isDodge && !isSwap && !isDamage && !isReload)
+        if(inputJump && !isJump && !isDodge && !isSwap && !isDamage && !isReload && !isHit)
         {
             rigid.AddForce(Vector3.up * jump, ForceMode.Impulse);
             anim.SetBool("isJump", true);
@@ -225,7 +228,7 @@ public class Player : MonoBehaviour
             return;
         }
 
-        if(inputDownGrenade && !isReload && !isSwap && !isDamage)
+        if(inputDownGrenade && !isReload && !isSwap && !isDamage && !isHit)
         {
             Ray ray = followCamera.ScreenPointToRay(Input.mousePosition);
 
@@ -285,7 +288,7 @@ public class Player : MonoBehaviour
             return;
         }
 
-        if(inputFire && isFireReady && !isDodge && !isJump && !isSwap && !isReload)
+        if(inputFire && isFireReady && !isDodge && !isJump && !isSwap && !isReload && !isHit)
         {
             if(currentWeapon.curAmmo > 0)
             {
@@ -300,7 +303,7 @@ public class Player : MonoBehaviour
             {
                 case Weapon.Type.Punching:
                     inputFire = Input.GetButtonDown("Fire1");
-                    if (inputFire && isFireReady && !isJump && !isDodge && !isDamage)
+                    if (inputFire && isFireReady && !isJump && !isDodge && !isDamage && !isHit)
                     {
                         currentWeapon.Use();
                         anim.SetTrigger("doPunching");
@@ -342,7 +345,7 @@ public class Player : MonoBehaviour
             return;
         }
 
-        if (inputReload && !isJump && !isDodge && !isSwap && isFireReady)
+        if (inputReload && !isJump && !isDodge && !isSwap && isFireReady && !isHit)
         {
             if(isReload || currentWeapon.curAmmo == currentWeapon.maxAmmo)
             {
@@ -572,8 +575,8 @@ public class Player : MonoBehaviour
         {
             if(!isDamage)
             {
-                Bullet bulletEnemy = other.GetComponent<Bullet>();
-                health -= bulletEnemy.damage;
+                Bullet bullet = other.GetComponentInParent<Bullet>();
+                health -= bullet.damage;
                 StartCoroutine(OnDamage());
             }
         }
@@ -620,11 +623,5 @@ public class Player : MonoBehaviour
         {
             nearObject = null;
         }
-    }
-
-    private void UpdateUI()
-    {
-        UIManager.Instance.HpText(health);
-        UIManager.Instance.AmmoText(currentWeapon.curAmmo, ammo);
     }
 }
